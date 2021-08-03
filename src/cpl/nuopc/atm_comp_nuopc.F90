@@ -692,12 +692,12 @@ contains
 
           ! error check differences between internally generated lons and those read in
           do n = 1,lsize
-             if (abs(lonMesh(n) - lon(n)) > 1.e-12_r8 .and. abs(lonMesh(n) - lon(n)) /= 360._r8) then
+             if (abs(lonMesh(n) - lon(n)) > 1.e-02_r8 .and. abs(lonMesh(n) - lon(n)) /= 360._r8) then
                 write(6,100)n,lon(n),lonMesh(n), abs(lonMesh(n)-lon(n))
 100             format('ERROR: CAM n, lonmesh(n), lon(n), diff_lon = ',i6,2(f21.13,3x),d21.5)
                 call shr_sys_abort()
              end if
-             if (abs(latMesh(n) - lat(n)) > 1.e-12_r8) then
+             if (abs(latMesh(n) - lat(n)) > 1.e-02_r8) then
                 write(6,100)n,lat(n),latMesh(n), abs(latMesh(n)-lat(n))
 101             format('ERROR: CAM n, latmesh(n), lat(n), diff_lat = ',i6,2(f21.13,3x),d21.5)
                 call shr_sys_abort()
