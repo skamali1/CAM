@@ -36,6 +36,7 @@
 
 <dtime dyn="mpas"                  >1800</dtime>
 <dtime dyn="mpas"  hgrid="mpasa60" >720</dtime> <!-- 2x mpas_dt -->
+<dtime dyn="mpas"  hgrid="mpasa30" >360</dtime> <!-- 2x mpas_dt -->
 
 <!-- Initial files -->
 
@@ -2879,6 +2880,7 @@
 <mpas_dt                      > 1800.0D0 </mpas_dt>
 <mpas_dt hgrid="mpasa120"     >  900.0D0 </mpas_dt>
 <mpas_dt hgrid="mpasa60"      >  360.0D0 </mpas_dt>
+<mpas_dt hgrid="mpasa30"      >  180.0D0 </mpas_dt>
 
 <mpas_split_dynamics_transport>.true.</mpas_split_dynamics_transport>
 <mpas_number_of_sub_steps     > 2 </mpas_number_of_sub_steps>
@@ -2894,6 +2896,7 @@
 <mpas_len_disp hgrid="mpasa480">480000.0D0</mpas_len_disp>
 <mpas_len_disp hgrid="mpasa120">120000.0D0</mpas_len_disp>
 <mpas_len_disp hgrid="mpasa60" >60000.0D0</mpas_len_disp>
+<mpas_len_disp hgrid="mpasa30" >30000.0D0</mpas_len_disp>
 
 <mpas_visc4_2dsmag            > 0.05D0 </mpas_visc4_2dsmag>
 <mpas_del4u_div_factor        > 10.0D0 </mpas_del4u_div_factor>
