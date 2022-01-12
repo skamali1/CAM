@@ -25,6 +25,9 @@ use cam_logfile,    only: iulog
 use perf_mod,       only: t_startf, t_stopf, t_barrierf
 use cam_abortutils, only: endrun
 use physconst,      only: thermodynamic_active_species_num,thermodynamic_active_species_idx,thermodynamic_active_species_idx_dycore
+!SK added this
+use mpi,              only: MPI_INTEGER, MPI_REAL8
+use time_manager,   only:  get_nstep
 implicit none
 private
 save
@@ -88,7 +91,6 @@ subroutine d_p_coupling(phys_state, phys_tend, pbuf2d, dyn_out)
    integer :: ierr
    character(len=*), parameter :: subname = 'd_p_coupling'
    !----------------------------------------------------------------------------
-
    compute_energy_diags=&
         (hist_fld_active('SE_dBF').or.hist_fld_active('SE_dAP').or.hist_fld_active('SE_dAM').or.&
          hist_fld_active('KE_dBF').or.hist_fld_active('KE_dAP').or.hist_fld_active('KE_dAM').or.&
@@ -124,6 +126,7 @@ subroutine d_p_coupling(phys_state, phys_tend, pbuf2d, dyn_out)
 
    allocate(pintdry(plev+1, nCellsSolve), stat=ierr)!note: .neq. dyn_out % pintdry since it is non-hydrostatic
    if( ierr /= 0 ) call endrun(subname//':failed to allocate pintdry array')
+
 
 !   call hydrostatic_pressure( &
 !        nCellsSolve, plev, zz, zint, rho_zz, theta_m, tracers(index_qv,:,:),&
@@ -180,7 +183,7 @@ subroutine d_p_coupling(phys_state, phys_tend, pbuf2d, dyn_out)
    call t_stopf('derived_phys')
 
    deallocate(pmid,pintdry,pmiddry)
-
+   
 end subroutine d_p_coupling
 
 !=========================================================================================
@@ -734,7 +737,8 @@ subroutine hydrostatic_pressure(nCells, nVertLevels, zz, zgrid, rho_zz, theta_m,
    real(r8), dimension(nVertLevels+1) :: pint  ! hydrostatic pressure at interface
    real(r8) :: pi, t
    real(r8) :: pk,rhok,rhodryk,theta,thetavk,kap1,kap2
-
+ ! sk added this
+   integer :: nstep_SK ,nprocessors, my_rank, ierr
    !
    ! For each column, integrate downward from model top to compute dry hydrostatic pressure at layer
    ! midpoints and interfaces. The pressure averaged to layer midpoints should be consistent with
@@ -742,6 +746,13 @@ subroutine hydrostatic_pressure(nCells, nVertLevels, zz, zgrid, rho_zz, theta_m,
    !
    kap1 = p0**(-rgas/cp)           ! pre-compute constants
    kap2 = cp/cv                    ! pre-compute constants
+
+   nstep_SK = get_nstep() ! sk added this for debugging
+   if(masterproc) then
+          print*, 'nstep',nstep_SK, 'pmiddry','  ','pmid','  ','pintdry'
+   endif
+
+
    do iCell = 1, nCells
 
       dz(:) = zgrid(2:nVertLevels+1,iCell) - zgrid(1:nVertLevels,iCell)
@@ -773,7 +784,21 @@ subroutine hydrostatic_pressure(nCells, nVertLevels, zz, zgrid, rho_zz, theta_m,
         !MPAS non-hydrostatic dry pressure is pmiddry(k,iCell) = (rhodryk*rgas*theta*kap1)**kap2
         pmiddry(k,iCell) = 0.5_r8*(pintdry(k+1,iCell)+pintdry(k,iCell))  
       end do
+!SK added this for debugging    
+!       if(masterproc) then
+!          do k =nVertLevels, 1, -1
+!           print*, k,icell, pmiddry(k, icell), pmid(k, icell), pintdry(k, icell)
+!          enddo
+!       endif
+!        call mpi_comm_rank (mpicom, my_rank, ierr)
+!        print *, my_rank, k,icell, pmiddry(nVertLevels, icell), pmid(nVertLevels, icell), pintdry(nVertLevels, icell)
+        if(masterproc) then
+           print*,my_rank, nVertLevels, icell, pmiddry(nVertLevels, icell),&
+             & pmid(nVertLevels, icell), pintdry(nVertLevels, icell)
+        endif
+
     end do
+
 end subroutine hydrostatic_pressure
 
 !=========================================================================================
@@ -809,7 +834,8 @@ subroutine hydrostatic_pressure_lnp(nCells, nVertLevels, zz, zgrid, rho_zz, thet
    real(r8), dimension(nVertLevels+1) :: lnp_interface        ! ln pressure at interface
    real(r8) :: pi, temperature
    real(r8) :: pk,rhok,rhodryk,theta,thetavk,kap1,kap2,tvk
-
+ ! sk added this
+   integer :: nstep_SK ,nprocessors, my_rank, ierr
    !
    ! For each column, integrate downward from model top to compute dry hydrostatic pressure at layer
    ! midpoints and interfaces. The pressure averaged to layer midpoints should be consistent with
@@ -817,6 +843,14 @@ subroutine hydrostatic_pressure_lnp(nCells, nVertLevels, zz, zgrid, rho_zz, thet
    !
    kap1 = p0**(-rgas/cp)           ! pre-compute constants
    kap2 = cp/cv                    ! pre-compute constants
+
+
+   nstep_SK = get_nstep() ! sk added this for debugging
+!   if(masterproc) then
+!          print*, 'nstep',nstep_SK, 'pmiddry','  ','pmid','  ','pintdry',&
+!                      & '  ','tvk','  ', 'temperature', ' ', 'thetavk'
+!   endif
+
 
    do iCell = 1, nCells
 
@@ -831,7 +865,7 @@ subroutine hydrostatic_pressure_lnp(nCells, nVertLevels, zz, zgrid, rho_zz, thet
       ! model top pressure diagnosed by hydrostatic integration 
       ! from the mid level height z(nVertLevels-1)+0.5*dz to the model top.
       !
-      lnp_dry_interface(nVertLevels+1) = log(pk) - dz(nVertLevels)*gravity/(rgas*tvk)
+      lnp_dry_interface(nVertLevels+1) = log(pk) -0.5_r8*dz(nVertLevels)*gravity/(rgas*tvk) ! added 0.5 here
       lnp_interface(nVertLevels+1) = lnp_dry_interface(nVertLevels+1)
       pintdry(nVertLevels+1,iCell) = exp(lnp_dry_interface(nVertLevels+1))
       
@@ -846,12 +880,53 @@ subroutine hydrostatic_pressure_lnp(nCells, nVertLevels, zz, zgrid, rho_zz, thet
 
         ! pintdry, pmiddry, and pmid are the outputs of this subroutine
         pintdry(k,iCell) = exp(lnp_dry_interface(k))
-        pmiddry(k,iCell) = exp( 0.5*(lnp_dry_interface(k)+lnp_dry_interface(k+1)) )
-        pmid(k,iCell) = exp( 0.5*(lnp_interface(k)+lnp_interface(k+1)) )
+        pmiddry(k,iCell) = exp( 0.5_r8*(lnp_dry_interface(k)+lnp_dry_interface(k+1)) )
+        pmid(k,iCell) = exp( 0.5_r8*(lnp_interface(k)+lnp_interface(k+1)) )
+
+!SK added this for debugging    
+ !      if(masterproc) then
+ !          print*, k,icell, pmiddry(k, icell), pmid(k, icell), pintdry(k, icell), tvk, temperature
+ !      endif
+
+ !     if(masterproc) then
+ !       if(k == nVertLevels) then
+!!          call mpi_comm_rank (mpicom, my_rank, ierr)
+ !         print *, my_rank, k,icell, pmiddry(k, icell), pmid(k, icell), pintdry(k, icell),&
+ !               & tvk, temperature, thetavk
+ !        endif
+ !     endif
 
      end do
+!     do k = nVertLevels, 1, -1
+!        pmiddry(k,iCell) = exp( 0.5_r8*(lnp_dry_interface(k)+lnp_dry_interface(k+1)) )
+!        pmid(k,iCell) = exp( 0.5_r8*(lnp_interface(k)+lnp_interface(k+1)) )
+!     end do
    end do
-
+! get number of processors
+!   nprocessors = 576
+!   do k=0,nprocessors , 1
+!    ! Get my id
+!    call mpi_comm_rank (mpicom, my_rank, ierr)
+!    IF(k == my_rank) THEN
+!        print *, 'Hello World from process: ', my_rank, 'of ', nprocessors
+!    END IF
+!    call MPI_BARRIER( mpicom,ierr)
+!   enddo
+!   nstep_SK = get_nstep()
+   if(masterproc) then
+        k = nVertLevels
+        iCell = 1
+        thetavk = theta_m(k,iCell)/ (1.0_r8 + q(k,iCell))                 !convert modified theta to virtual theta
+        tvk              =exner(k,iCell)*thetavk
+        theta            = theta_m(k,iCell)/(1.0_r8 + Rv_over_Rd * q(k,iCell)) !potential temperature
+        temperature      = exner(k,iCell)*theta
+        print*, 'nstep',nstep_SK, 'pmiddry',' ','pmid',' ','pintdry',' ',&
+         &'thetavk', ' ', 'tvk', ' ', 'temperature'
+!   do k = nVertLevels, 1, -1
+     print*, k, pmiddry(k, 1), pmid(k, 1), pintdry(k, 1), thetavk, tvk, temperature
+ !  enddo  
+  endif
+!------------------------------
 end subroutine hydrostatic_pressure_lnp
 
 subroutine tot_energy(nCells, nVertLevels, qsize, index_qv, zz, zgrid, rho_zz, theta_m, q, ux,uy,outfld_name_suffix)
